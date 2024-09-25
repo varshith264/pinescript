@@ -1,0 +1,75 @@
+//@version=5
+strategy("Moving Average Crossover with Risk Management", overlay=true, initial_capital=10000, default_qty_type=strategy.fixed, pyramiding=10, calc_on_order_fills=true)
+
+// Input Parameters
+// Moving Averages
+shortMAPeriod = input.int(50, minval=1, title="Short MA Period")
+longMAPeriod = input.int(200, minval=1, title="Long MA Period")
+
+// ATR Settings
+atrPeriod = input.int(14, minval=1, title="ATR Period")
+
+// Risk Management Settings
+riskPercent = input.float(0.5, minval=0.1, maxval=100, title="Risk per Trade (%)")  // 0.5% per trade
+riskRewardRatio = input.float(2.0, minval=1.0, title="Risk-Reward Ratio")
+minPositionSize = input.float(1, minval=0.001, title="Minimum Position Size")
+
+// Moving Averages
+shortMA = ta.sma(close, shortMAPeriod)
+longMA = ta.sma(close, longMAPeriod)
+
+// Plot Moving Averages
+plot(shortMA, color=color.blue, title="Short MA")
+plot(longMA, color=color.red, title="Long MA")
+
+// Crossover Conditions
+longCondition = ta.crossover(shortMA, longMA)
+shortCondition = ta.crossunder(shortMA, longMA)
+
+// Calculate ATR for Stop-Loss and Take-Profit Levels
+atr = ta.atr(atrPeriod)
+
+// Trade Execution
+if (longCondition)
+    // Entry Price
+    longEntryPrice = close
+    // Stop-Loss Price (1 ATR below entry)
+    longStopLoss = longEntryPrice - atr
+    // Take-Profit Price (RR times ATR above entry)
+    longTakeProfit = longEntryPrice + (atr * riskRewardRatio)
+    // Calculate Risk per Trade in Dollars
+    riskDollars = strategy.equity * (riskPercent / 100)
+    // Calculate Stop-Loss Distance
+    stopLossPerUnit = longEntryPrice - longStopLoss
+    // Ensure Stop-Loss Distance is Positive
+    if stopLossPerUnit > 0
+        // Calculate Position Size
+        positionSize = riskDollars / stopLossPerUnit
+        // Ensure Position Size is at Least the Minimum
+        positionSize := math.max(positionSize, minPositionSize)
+        // Enter Long Position
+        strategy.entry(id="Long_" + str.tostring(time), direction=strategy.long, qty=positionSize)
+        // Set Stop-Loss and Take-Profit
+        strategy.exit(id="Long Exit_" + str.tostring(time), from_entry="Long_" + str.tostring(time), stop=longStopLoss, limit=longTakeProfit)
+
+if (shortCondition)
+    // Entry Price
+    shortEntryPrice = close
+    // Stop-Loss Price (1 ATR above entry)
+    shortStopLoss = shortEntryPrice + atr
+    // Take-Profit Price (RR times ATR below entry)
+    shortTakeProfit = shortEntryPrice - (atr * riskRewardRatio)
+    // Calculate Risk per Trade in Dollars
+    riskDollars = strategy.equity * (riskPercent / 100)
+    // Calculate Stop-Loss Distance
+    stopLossPerUnit = shortStopLoss - shortEntryPrice
+    // Ensure Stop-Loss Distance is Positive
+    if stopLossPerUnit > 0
+        // Calculate Position Size
+        positionSize = riskDollars / stopLossPerUnit
+        // Ensure Position Size is at Least the Minimum
+        positionSize := math.max(positionSize, minPositionSize)
+        // Enter Short Position
+        strategy.entry(id="Short_" + str.tostring(time), direction=strategy.short, qty=positionSize)
+        // Set Stop-Loss and Take-Profit
+        strategy.exit(id="Short Exit_" + str.tostring(time), from_entry="Short_" + str.tostring(time), stop=shortStopLoss, limit=shortTakeProfit)
